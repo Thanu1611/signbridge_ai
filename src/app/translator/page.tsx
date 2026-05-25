@@ -26,9 +26,8 @@ export default function TranslatorPage() {
           Live Sign Translator
         </h1>
         <p className="mt-2 text-slate-600 dark:text-slate-400">
-          Point your camera at a sign gesture. MediaPipe Hands tracks 21
-          landmarks in real time; the classifier translates them to text and
-          speech.
+          Point your camera at sign gestures. Hold each sign steady to add words
+          and build a sentence — text and voice update as you sign.
         </p>
       </header>
       <CameraTranslator />

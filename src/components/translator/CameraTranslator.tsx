@@ -1,14 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { Camera, CameraOff, Eraser, Hand, Save } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, CameraOff, Eraser, Hand, RotateCcw, Save } from "lucide-react";
 import { GestureResultCard } from "./GestureResultCard";
+import { SentenceResultCard } from "./SentenceResultCard";
 import { TextToSpeechButton } from "./TextToSpeechButton";
+import { useSignSentence } from "@/hooks/useSignSentence";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { useHandTracking } from "@/hooks/useHandTracking";
 import { HAND_LANDMARK_COUNT } from "@/lib/mediapipe/types";
 import type { GestureResult } from "@/types";
 import { useApp } from "@/context/AppProvider";
+import { useTextToSpeech } from "@/hooks/useTextToSpeech";
+import { gesturePhraseTexts } from "@/lib/tts-cache";
 import { saveTranslation } from "@/lib/history";
 import { cn } from "@/lib/utils";
 
@@ -17,8 +21,10 @@ export function CameraTranslator({
 }: {
   onGesture?: (result: GestureResult | null) => void;
 } = {}) {
-  const { language, user, isGuest, showToast } = useApp();
+  const { language, user, isGuest, showToast, voiceType } = useApp();
   const [saving, setSaving] = useState(false);
+  const { speak, prefetch, stop: stopSpeech } = useTextToSpeech();
+  const prevSentenceLengthRef = useRef(0);
 
   const {
     videoRef,
@@ -31,19 +37,63 @@ export function CameraTranslator({
     landmarks,
     gestureResult,
     setGestureResult,
+    signRecognized,
     startCamera,
     stopCamera,
   } = useHandTracking({ language, onGesture });
 
+  const { words, sentence, undoLastWord, clearSentence } =
+    useSignSentence(gestureResult);
+
+  useEffect(() => {
+    void prefetch(gesturePhraseTexts(language), voiceType, language);
+  }, [language, voiceType, prefetch]);
+
+  useEffect(() => {
+    if (!isActive) return;
+    void prefetch(gesturePhraseTexts(language), voiceType, language);
+  }, [isActive, language, voiceType, prefetch]);
+
+  useEffect(() => {
+    if (words.length <= prevSentenceLengthRef.current) {
+      prevSentenceLengthRef.current = words.length;
+      return;
+    }
+    const latest = words[words.length - 1];
+    prevSentenceLengthRef.current = words.length;
+    void speak(latest.text, voiceType, language, {
+      instantOnMiss: true,
+      lowLatency: true,
+    });
+  }, [words, speak, voiceType, language]);
+
+  useEffect(() => {
+    return () => {
+      stopSpeech();
+    };
+  }, [stopSpeech]);
+
+  const handleClearAll = () => {
+    clearSentence();
+    setGestureResult(null);
+  };
+
   const handleSave = async () => {
-    if (!gestureResult) return;
+    const text = sentence.trim() || gestureResult?.translatedText;
+    if (!text) return;
     setSaving(true);
     try {
       await saveTranslation({
         mode: "sign_to_text",
-        detectedGesture: gestureResult.gesture,
-        translatedText: gestureResult.translatedText,
-        confidenceScore: gestureResult.confidence,
+        detectedGesture:
+          words.length > 0
+            ? words.map((w) => w.gesture).join(", ")
+            : (gestureResult?.gesture ?? null),
+        translatedText: text,
+        confidenceScore:
+          words.length > 0
+            ? words.reduce((s, w) => s + w.confidence, 0) / words.length
+            : (gestureResult?.confidence ?? null),
         language,
         userId: user?.id ?? null,
       });
@@ -62,24 +112,22 @@ export function CameraTranslator({
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="space-y-4">
         <div className="relative overflow-hidden rounded-2xl border border-brand-border/50 bg-slate-900 shadow-lg dark:border-slate-700">
+          {/* Hidden source for detection; live feed is painted on canvas */}
           <video
             ref={videoRef}
-            className={cn(
-              "aspect-[4/3] w-full max-h-[min(70vh,480px)] object-cover sm:max-h-[480px]",
-              isActive && "scale-x-[-1]",
-              !isActive && "opacity-40"
-            )}
+            className="pointer-events-none absolute h-0 w-0 opacity-0"
             playsInline
             muted
             autoPlay={false}
+            aria-hidden
           />
           <canvas
             ref={canvasRef}
             className={cn(
-              "pointer-events-none absolute inset-0 h-full w-full object-cover",
-              isActive && "scale-x-[-1]"
+              "block aspect-[4/3] w-full max-h-[min(70vh,480px)] bg-slate-900 sm:max-h-[480px]",
+              !isActive && !isLoading && "opacity-40"
             )}
-            aria-hidden
+            aria-label="Live camera with hand tracking overlay"
           />
 
           {!isActive && !isLoading && (
@@ -101,7 +149,11 @@ export function CameraTranslator({
           className={cn(
             "flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 text-sm",
             status === "hand_detected" &&
+              signRecognized &&
               "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+            status === "hand_detected" &&
+              !signRecognized &&
+              "bg-cyan-50 text-cyan-900 dark:bg-cyan-950/40 dark:text-brand-cyan",
             status === "no_hand_detected" &&
               "bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
             status === "loading" &&
@@ -114,14 +166,24 @@ export function CameraTranslator({
           <Hand
             className={cn(
               "h-4 w-4 shrink-0",
-              status === "hand_detected" && "text-emerald-600",
+              status === "hand_detected" &&
+                signRecognized &&
+                "text-emerald-600",
+              status === "hand_detected" &&
+                !signRecognized &&
+                "text-brand-cyan",
               status === "no_hand_detected" && "text-amber-600"
             )}
           />
-          <span>{statusLabel}</span>
+          <span>
+            {status === "hand_detected" && signRecognized
+              ? "Sign recognized"
+              : statusLabel}
+          </span>
           {landmarks && status === "hand_detected" && (
             <span className="text-xs opacity-80">
               · {landmarks.length}/{HAND_LANDMARK_COUNT} landmarks
+              {signRecognized ? " · green = sign" : " · cyan = tracking"}
             </span>
           )}
         </div>
@@ -160,27 +222,40 @@ export function CameraTranslator({
         </div>
 
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Demo signs: open palm → Hello · thumbs up → Yes · fist → Stop · two
-          fingers → Peace · wave hand → Hi
+          Hold each sign ~1s to add a word to your sentence. Signs: palm = Hello ·
+          thumbs up = Yes · index only = No · fist = Stop · two fingers = Peace ·
+          wave = Hi.
         </p>
       </div>
 
       <div className="space-y-4">
+        <SentenceResultCard sentence={sentence} words={words} />
         <GestureResultCard result={gestureResult} />
         <div className="flex flex-wrap gap-3">
-          <TextToSpeechButton text={gestureResult?.translatedText ?? ""} />
+          <TextToSpeechButton
+            text={sentence.trim() || (gestureResult?.translatedText ?? "")}
+          />
           <button
             type="button"
-            onClick={() => setGestureResult(null)}
+            onClick={undoLastWord}
+            disabled={words.length === 0}
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Undo word
+          </button>
+          <button
+            type="button"
+            onClick={handleClearAll}
             className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300"
           >
             <Eraser className="h-4 w-4" />
-            Clear
+            Clear all
           </button>
           <button
             type="button"
             onClick={handleSave}
-            disabled={!gestureResult || saving}
+            disabled={(!sentence.trim() && !gestureResult) || saving}
             className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
           >
             <Save className="h-4 w-4" />

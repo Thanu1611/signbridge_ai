@@ -19,6 +19,8 @@ export interface TtsOptions {
   text: string;
   voiceType?: string;
   language?: AppLanguage;
+  /** Faster model for live translator (slightly less natural, lower latency). */
+  lowLatency?: boolean;
 }
 
 export async function generateSpeech(
@@ -30,7 +32,9 @@ export async function generateSpeech(
   }
 
   const voiceId = resolveVoiceId(options.voiceType);
-  const modelId = resolveModelId(options.voiceType);
+  const modelId = options.lowLatency
+    ? "eleven_turbo_v2_5"
+    : resolveModelId(options.voiceType);
   const languageCode = resolveLanguageCode(options.language);
 
   const body: Record<string, unknown> = {

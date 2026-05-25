@@ -1,4 +1,4 @@
-/* MediaPipe Hands — browser-only, WASM assets from CDN */
+/* MediaPipe Hands — WASM, optimized for real-time finger tracking in the browser */
 
 import type { HandsResults } from "./types";
 
@@ -15,61 +15,35 @@ interface HandsInstance {
   close(): void;
 }
 
-interface CameraInstance {
-  start(): Promise<void>;
-  stop(): Promise<void>;
-}
-
 type HandsConstructor = new (config: {
   locateFile: (file: string) => string;
 }) => HandsInstance;
 
-type CameraConstructor = new (
-  video: HTMLVideoElement,
-  options: {
-    onFrame: () => Promise<void>;
-    width?: number;
-    height?: number;
-    facingMode?: "user" | "environment";
-  }
-) => CameraInstance;
-
-export interface HandsSession {
-  start(video: HTMLVideoElement): Promise<void>;
-  stop(): Promise<void>;
+export interface HandsTracker {
+  sendFrame(video: HTMLVideoElement): Promise<void>;
+  close(): void;
 }
 
-async function loadMediaPipeModules(): Promise<{
-  Hands: HandsConstructor;
-  Camera: CameraConstructor;
-}> {
-  const [handsMod, cameraMod] = await Promise.all([
-    import("@mediapipe/hands"),
-    import("@mediapipe/camera_utils"),
-  ]);
-
+async function loadHandsConstructor(): Promise<HandsConstructor> {
+  const handsMod = await import("@mediapipe/hands");
   const Hands = (handsMod as { Hands?: HandsConstructor }).Hands;
-  const Camera = (cameraMod as { Camera?: CameraConstructor }).Camera;
-
-  if (!Hands || !Camera) {
-    throw new Error("MediaPipe modules failed to load");
+  if (!Hands) {
+    throw new Error("MediaPipe Hands failed to load");
   }
-
-  return { Hands, Camera };
+  return Hands;
 }
 
 /**
- * Creates a MediaPipe Hands session with selfie-mode for front cameras.
- * Uses @mediapipe/camera_utils for a stable frame loop.
+ * MediaPipe Hands tracker (no Camera util — use your own video stream + canvas).
  */
-export async function createHandsSession(
+export async function createHandsTracker(
   onResults: (results: HandsResults) => void
-): Promise<HandsSession> {
+): Promise<HandsTracker> {
   if (typeof window === "undefined") {
     throw new Error("MediaPipe Hands can only load in the browser");
   }
 
-  const { Hands, Camera } = await loadMediaPipeModules();
+  const Hands = await loadHandsConstructor();
 
   const hands = new Hands({
     locateFile: (file) => `${HANDS_CDN}/${file}`,
@@ -78,60 +52,22 @@ export async function createHandsSession(
   hands.setOptions({
     maxNumHands: 1,
     modelComplexity: 0,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5,
+    minDetectionConfidence: 0.55,
+    minTrackingConfidence: 0.55,
     selfieMode: true,
   });
   hands.onResults(onResults);
 
-  let camera: CameraInstance | null = null;
-  let processing = false;
+  let closed = false;
 
   return {
-    async start(video: HTMLVideoElement) {
-      camera = new Camera(video, {
-        onFrame: async () => {
-          if (processing) return;
-          processing = true;
-          try {
-            if (video.readyState >= 2 && video.videoWidth > 0) {
-              await hands.send({ image: video });
-            }
-          } catch {
-            /* skip frame on transient send errors */
-          } finally {
-            processing = false;
-          }
-        },
-        width: 1280,
-        height: 720,
-        facingMode: "user",
-      });
-      await camera.start();
+    async sendFrame(video: HTMLVideoElement) {
+      if (closed || video.readyState < 2 || video.videoWidth === 0) return;
+      await hands.send({ image: video });
     },
-    async stop() {
-      await camera?.stop();
-      camera = null;
+    close() {
+      closed = true;
       hands.close();
     },
   };
-}
-
-/** @deprecated Use createHandsSession */
-export async function createHandsDetector(
-  onResults: (results: HandsResults) => void
-): Promise<HandsInstance> {
-  const { Hands } = await loadMediaPipeModules();
-  const hands = new Hands({
-    locateFile: (file) => `${HANDS_CDN}/${file}`,
-  });
-  hands.setOptions({
-    maxNumHands: 1,
-    modelComplexity: 0,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5,
-    selfieMode: true,
-  });
-  hands.onResults(onResults);
-  return hands;
 }
