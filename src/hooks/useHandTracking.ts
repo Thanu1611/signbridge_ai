@@ -27,10 +27,10 @@ export type CameraTrackingStatus =
   | "no_hand_detected";
 
 export const TRACKING_STATUS_LABEL: Record<CameraTrackingStatus, string> = {
-  inactive: "Camera inactive",
-  loading: "Camera loading",
-  hand_detected: "Hand detected",
-  no_hand_detected: "No hand detected",
+  inactive: "🔴 Camera Offline",
+  loading: "🟢 Camera Active",
+  hand_detected: "🤖 AI Detecting Sign...",
+  no_hand_detected: "🟢 Camera Active",
 };
 
 const TRACK_INTERVAL_MS = 40;

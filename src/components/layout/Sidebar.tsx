@@ -8,11 +8,10 @@ import {
   Camera,
   History,
   Home,
-  Info,
   Mic,
-  Settings,
 } from "lucide-react";
-import { NAV_ITEMS } from "@/lib/constants";
+import { getNavItems } from "@/lib/auth/access";
+import { useIsAuthenticated } from "@/hooks/useIsAuthenticated";
 import { cn } from "@/lib/utils";
 
 const iconMap = {
@@ -22,17 +21,17 @@ const iconMap = {
   AlertTriangle,
   BookOpen,
   History,
-  Info,
-  Settings,
 } as const;
 
 export function Sidebar() {
   const pathname = usePathname();
+  const isAuthenticated = useIsAuthenticated();
+  const navItems = getNavItems(isAuthenticated);
 
   return (
     <aside className="hidden w-64 shrink-0 border-r border-brand-border/50 bg-surface/50 p-4 dark:border-slate-800 dark:bg-slate-900/50 lg:block">
       <nav className="flex flex-col gap-1">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const Icon = iconMap[item.icon as keyof typeof iconMap];
           const active =
             item.href === "/"
@@ -49,7 +48,7 @@ export function Sidebar() {
                   : "text-slate-600 hover:bg-cyan-50 dark:text-slate-300 dark:hover:bg-slate-800"
               )}
             >
-              <Icon className="h-5 w-5" />
+              <Icon className="h-5 w-5 shrink-0" />
               {item.label}
             </Link>
           );

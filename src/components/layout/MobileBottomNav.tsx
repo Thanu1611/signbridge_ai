@@ -10,33 +10,49 @@ import {
   Home,
   Mic,
 } from "lucide-react";
+import { getNavItems } from "@/lib/auth/access";
+import { useIsAuthenticated } from "@/hooks/useIsAuthenticated";
 import { cn } from "@/lib/utils";
 
-const mobileNav = [
-  { href: "/", label: "Home", icon: Home },
-  { href: "/translator", label: "Translate", icon: Camera },
-  { href: "/voice", label: "Voice", icon: Mic },
-  { href: "/emergency", label: "SOS", icon: AlertTriangle },
-  { href: "/learn", label: "Learn", icon: BookOpen },
-  { href: "/history", label: "History", icon: History },
-];
+const iconMap = {
+  Home,
+  Camera,
+  Mic,
+  AlertTriangle,
+  BookOpen,
+  History,
+} as const;
 
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const isAuthenticated = useIsAuthenticated();
   const hideOnAuth =
     pathname.startsWith("/login") || pathname.startsWith("/signup");
 
   if (hideOnAuth) return null;
 
+  const navItems = getNavItems(isAuthenticated);
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-brand-border/50 bg-surface/95 backdrop-blur-md dark:border-slate-800 dark:bg-[#0a0a0a]/95 lg:hidden">
-      <div className="mx-auto flex max-w-lg items-center justify-around px-1 py-2">
-        {mobileNav.map((item) => {
-          const Icon = item.icon;
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-brand-border/50 bg-white/95 backdrop-blur-md dark:border-slate-800 dark:bg-[#0a0a0a]/95 lg:hidden">
+      <div
+        className={cn(
+          "mx-auto flex max-w-lg items-center justify-around px-1 py-2",
+          navItems.length <= 2 && "max-w-xs"
+        )}
+      >
+        {navItems.map((item) => {
+          const Icon = iconMap[item.icon as keyof typeof iconMap];
           const active =
             item.href === "/"
               ? pathname === "/"
               : pathname.startsWith(item.href);
+          const shortLabel =
+            item.label === "Live Sign Translation"
+              ? "Translate"
+              : item.label === "Emergency"
+                ? "SOS"
+                : item.label;
           return (
             <Link
               key={item.href}
@@ -47,7 +63,7 @@ export function MobileBottomNav() {
               )}
             >
               <Icon className={cn("h-5 w-5", active && "scale-110")} />
-              {item.label}
+              {shortLabel}
             </Link>
           );
         })}

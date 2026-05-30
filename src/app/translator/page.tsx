@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { GuestSignInPrompt } from "@/components/layout/GuestSignInPrompt";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 
 const CameraTranslator = dynamic(
@@ -30,6 +31,7 @@ export default function TranslatorPage() {
           and build a sentence — text and voice update as you sign.
         </p>
       </header>
+      <GuestSignInPrompt />
       <CameraTranslator />
     </div>
   );

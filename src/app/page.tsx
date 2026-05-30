@@ -10,7 +10,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import { APP_NAME, TAGLINE } from "@/lib/constants";
+import { APP_NAME, LOGO_SRC, TAGLINE } from "@/lib/constants";
 
 const features = [
   {
@@ -42,24 +42,22 @@ const features = [
 export default function HomePage() {
   return (
     <div className="pb-8">
-      <section className="relative overflow-hidden bg-gradient-to-br from-brand-blue/15 via-background to-brand-cyan/10 px-4 py-16 dark:from-brand-blue/20 dark:via-[#0a0a0a] dark:to-brand-cyan/10 md:py-24 lg:px-8">
+      <section className="relative overflow-hidden bg-gradient-to-br from-sky-100 via-white to-cyan-50 px-4 py-8 md:py-12 lg:px-8 dark:from-brand-blue/20 dark:via-[#0a0a0a] dark:to-brand-cyan/10">
         <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-brand-cyan/20 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-10 -left-10 h-48 w-48 rounded-full bg-brand-blue/20 blur-3xl" />
 
         <div className="relative mx-auto max-w-4xl text-center animate-fade-in-up">
           <Image
-            src="/logo.png"
+            src={LOGO_SRC}
             alt={`${APP_NAME} logo`}
-            width={280}
-            height={120}
-            className="mx-auto h-auto w-full max-w-xs object-contain md:max-w-sm"
+            width={640}
+            height={640}
+            unoptimized
+            className="mx-auto -my-4 h-auto w-full max-w-[260px] object-contain sm:max-w-xs md:-my-6 md:max-w-sm"
             priority
           />
-          
-          <h1 className="mt-4 text-4xl font-extrabold tracking-tight text-brand-gradient md:text-5xl">
-            {APP_NAME}
-          </h1>
-          <p className="mt-4 text-lg font-medium text-brand-cyan md:text-xl">{TAGLINE}</p>
+
+          <p className="mt-3 text-lg font-medium text-brand-cyan md:text-xl">{TAGLINE}</p>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-slate-600 dark:text-slate-300 md:text-lg">
             Millions of people communicate through sign language, yet everyday spaces
             still rely on voice. SignBridge AI bridges that gap with real-time gesture

@@ -44,7 +44,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var k="signbridge_light_default_v1",t=localStorage.getItem("signbridge_theme");if(!localStorage.getItem(k)){localStorage.setItem("signbridge_theme","light");localStorage.setItem(k,"1");t="light";}document.documentElement.classList.remove("dark");if(t==="dark")document.documentElement.classList.add("dark");}catch(e){document.documentElement.classList.remove("dark");}})();`,
+          }}
+        />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
       >

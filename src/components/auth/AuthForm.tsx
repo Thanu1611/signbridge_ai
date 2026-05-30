@@ -1,15 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
-import { APP_NAME } from "@/lib/constants";
+import { APP_NAME, LOGO_SRC } from "@/lib/constants";
+import { LOGIN_REQUIRED_MESSAGE } from "@/lib/auth/access";
 import { useApp } from "@/context/AppProvider";
-export function AuthForm({ mode }: { mode: "login" | "signup" }) {
+
+function AuthFormInner({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showToast, guestMode, setSessionUser } = useApp();
+  const loginMessage = searchParams.get("message");
+  const redirectFrom = searchParams.get("from");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -45,7 +51,11 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         mode === "signup" ? "Account created! Welcome to SignBridge AI." : "Welcome back!",
         "success"
       );
-      router.push("/translator");
+      const destination =
+        redirectFrom && redirectFrom.startsWith("/") && !redirectFrom.startsWith("/login")
+          ? redirectFrom
+          : "/translator";
+      router.push(destination);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Authentication failed");
@@ -59,18 +69,28 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       <div className="w-full max-w-md rounded-3xl border border-brand-border/50 bg-surface p-8 shadow-xl dark:border-slate-700 dark:bg-slate-900">
         <div className="mb-6 flex flex-col items-center text-center">
           <Image
-            src="/logo.png"
+            src={LOGO_SRC}
             alt={`${APP_NAME} logo`}
-            width={200}
+            width={280}
             height={80}
-            className="h-auto w-full max-w-[200px] object-contain"
+            unoptimized
+            className="h-auto w-full max-w-[280px] rounded-xl object-contain"
             priority
           />
-          <h1 className="mt-4 text-2xl font-bold text-brand-gradient">{APP_NAME}</h1>
-          <p className="mt-1 text-slate-500">
-            {mode === "login" ? "Sign in to sync your history" : "Create your account"}
+          <p className="mt-4 text-slate-500">
+            {mode === "login"
+              ? "Sign in to unlock the full SignBridge AI experience"
+              : "Create your account"}
           </p>
         </div>
+
+        {mode === "login" && loginMessage && (
+          <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            {loginMessage === LOGIN_REQUIRED_MESSAGE
+              ? loginMessage
+              : decodeURIComponent(loginMessage)}
+          </p>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === "signup" && (
@@ -149,7 +169,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
             }}
             className="font-medium text-slate-600 hover:text-brand-cyan"
           >
-            Continue as guest →
+            Try live sign translation as guest →
           </button>
           <Link href="/" className="block text-slate-400 hover:text-slate-600">
             ← Back to home
@@ -157,5 +177,19 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         </div>
       </div>
     </div>
+  );
+}
+
+export function AuthForm({ mode }: { mode: "login" | "signup" }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-brand-cyan" />
+        </div>
+      }
+    >
+      <AuthFormInner mode={mode} />
+    </Suspense>
   );
 }

@@ -1,15 +1,17 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --brand-blue: #0047ab;
   --brand-cyan: #00c2cb;
   --brand-teal: #26c299;
-  --background: #f0f9ff;
+  --background: #f8fafc;
   --foreground: #0f172a;
   --primary: var(--brand-cyan);
   --primary-dark: var(--brand-blue);
   --surface: #ffffff;
-  --border: #bae6fd;
+  --border: #e0f2fe;
 }
 
 .dark {
@@ -34,6 +36,11 @@
 
 html {
   scroll-behavior: smooth;
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 body {

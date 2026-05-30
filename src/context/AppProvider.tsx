@@ -38,12 +38,13 @@ const AppContext = createContext<AppContextValue | null>(null);
 
 const LANG_KEY = "signbridge_language";
 const THEME_KEY = "signbridge_theme";
+const THEME_LIGHT_DEFAULT_KEY = "signbridge_light_default_v1";
 const VOICE_KEY = "signbridge_voice";
 const GUEST_KEY = "signbridge_guest";
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<AppLanguage>("en");
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [voiceType, setVoiceType] = useState("default");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isGuest, setIsGuest] = useState(true);
@@ -68,11 +69,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setLanguageState(lang);
         if (savedLang !== lang) localStorage.setItem(LANG_KEY, lang);
       }
-      if (savedTheme) setTheme(savedTheme);
+
+      // One-time switch to light theme as the app default
+      if (!localStorage.getItem(THEME_LIGHT_DEFAULT_KEY)) {
+        localStorage.setItem(THEME_KEY, "light");
+        localStorage.setItem(THEME_LIGHT_DEFAULT_KEY, "1");
+      }
+
+      const themePref = localStorage.getItem(THEME_KEY) as "light" | "dark" | null;
+      const activeTheme = themePref === "dark" ? "dark" : "light";
+      setTheme(activeTheme);
+      document.documentElement.classList.remove("dark");
+      if (activeTheme === "dark") document.documentElement.classList.add("dark");
+
       if (savedVoice) setVoiceType(savedVoice);
       setIsGuest(guest);
-      const isDark = savedTheme ? savedTheme === "dark" : true;
-      document.documentElement.classList.toggle("dark", isDark);
     });
   }, []);
 
@@ -98,7 +109,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTheme((t) => {
       const next = t === "light" ? "dark" : "light";
       localStorage.setItem(THEME_KEY, next);
-      document.documentElement.classList.toggle("dark", next === "dark");
+      document.documentElement.classList.remove("dark");
+      if (next === "dark") document.documentElement.classList.add("dark");
       return next;
     });
   }, []);

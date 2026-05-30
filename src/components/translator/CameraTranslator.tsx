@@ -177,7 +177,7 @@ export function CameraTranslator({
           />
           <span>
             {status === "hand_detected" && signRecognized
-              ? "Sign recognized"
+              ? "✅ Sign Recognized"
               : statusLabel}
           </span>
           {landmarks && status === "hand_detected" && (

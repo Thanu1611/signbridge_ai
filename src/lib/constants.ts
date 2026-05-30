@@ -3,6 +3,8 @@ import type { AppLanguage, GestureKey } from "@/types";
 export const APP_NAME = "SignBridge AI";
 export const TAGLINE =
   "Not everyone speaks with voice — but everyone deserves to be heard.";
+/** Logo asset path — update filename when replacing the image to bust cache */
+export const LOGO_SRC = "/signbridge-logo.png";
 export const PRIMARY_COLOR = "#00C2CB";
 export const BRAND_BLUE = "#0047AB";
 export const BRAND_CYAN = "#00C2CB";
@@ -67,6 +69,7 @@ export const EMERGENCY_PHRASES = [
   { key: "call_family", en: "Call my family", ta: "என் குடும்பத்தை அழைக்கவும்" },
 ] as const;
 
+/** @deprecated Use getNavItems() from lib/auth/access.ts */
 export const NAV_ITEMS = [
   { href: "/", label: "Home", icon: "Home" },
   { href: "/translator", label: "Translate", icon: "Camera" },
@@ -75,7 +78,6 @@ export const NAV_ITEMS = [
   { href: "/learn", label: "Learn", icon: "BookOpen" },
   { href: "/history", label: "History", icon: "History" },
   { href: "/about", label: "About", icon: "Info" },
-  { href: "/settings", label: "Settings", icon: "Settings" },
 ] as const;
 
 export const LESSONS = [

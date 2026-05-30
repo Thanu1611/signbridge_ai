@@ -22,7 +22,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-b from-cyan-50/40 via-background to-sky-50/30 dark:from-[#0a0a0a] dark:via-slate-950 dark:to-[#0a0a0a]">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-sky-50 via-white to-cyan-50/60 dark:from-[#0a0a0a] dark:via-slate-950 dark:to-[#0a0a0a]">
       <Navbar />
       <div className="flex flex-1">
         {!isLanding && <Sidebar />}
