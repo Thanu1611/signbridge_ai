@@ -9,6 +9,7 @@ import { useSignSentence } from "@/hooks/useSignSentence";
 import { LoadingSpinner } from "@/components/ui/LoadingSpinner";
 import { useHandTracking } from "@/hooks/useHandTracking";
 import { HAND_LANDMARK_COUNT } from "@/lib/mediapipe/types";
+import { SIGN_VOCABULARY } from "@/lib/signs";
 import type { GestureResult } from "@/types";
 import { useApp } from "@/context/AppProvider";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
@@ -23,8 +24,7 @@ export function CameraTranslator({
 } = {}) {
   const { language, user, isGuest, showToast, voiceType } = useApp();
   const [saving, setSaving] = useState(false);
-  const { speak, prefetch, stop: stopSpeech } = useTextToSpeech();
-  const prevSentenceLengthRef = useRef(0);
+  const { prefetch, stop: stopSpeech } = useTextToSpeech();
 
   const {
     videoRef,
@@ -42,8 +42,15 @@ export function CameraTranslator({
     stopCamera,
   } = useHandTracking({ language, onGesture });
 
-  const { words, sentence, undoLastWord, clearSentence } =
-    useSignSentence(gestureResult);
+  const {
+    words,
+    rawSentence,
+    naturalSentence,
+    undoLastWord,
+    clearSentence,
+  } = useSignSentence(gestureResult, language);
+
+  const speakText = naturalSentence.trim() || gestureResult?.detectedWord || "";
 
   useEffect(() => {
     void prefetch(gesturePhraseTexts(language), voiceType, language);
@@ -51,21 +58,12 @@ export function CameraTranslator({
 
   useEffect(() => {
     if (!isActive) return;
-    void prefetch(gesturePhraseTexts(language), voiceType, language);
+    void prefetch(
+      [...gesturePhraseTexts(language), "Hello, how are you?", "Thank you."],
+      voiceType,
+      language
+    );
   }, [isActive, language, voiceType, prefetch]);
-
-  useEffect(() => {
-    if (words.length <= prevSentenceLengthRef.current) {
-      prevSentenceLengthRef.current = words.length;
-      return;
-    }
-    const latest = words[words.length - 1];
-    prevSentenceLengthRef.current = words.length;
-    void speak(latest.text, voiceType, language, {
-      instantOnMiss: true,
-      lowLatency: true,
-    });
-  }, [words, speak, voiceType, language]);
 
   useEffect(() => {
     return () => {
@@ -79,7 +77,7 @@ export function CameraTranslator({
   };
 
   const handleSave = async () => {
-    const text = sentence.trim() || gestureResult?.translatedText;
+    const text = naturalSentence.trim() || gestureResult?.detectedWord;
     if (!text) return;
     setSaving(true);
     try {
@@ -87,13 +85,13 @@ export function CameraTranslator({
         mode: "sign_to_text",
         detectedGesture:
           words.length > 0
-            ? words.map((w) => w.gesture).join(", ")
+            ? words.map((w) => w.wordId).join(", ")
             : (gestureResult?.gesture ?? null),
         translatedText: text,
         confidenceScore:
           words.length > 0
-            ? words.reduce((s, w) => s + w.confidence, 0) / words.length
-            : (gestureResult?.confidence ?? null),
+            ? words.reduce((s, w) => s + w.confidenceScore, 0) / words.length
+            : (gestureResult?.confidenceScore ?? null),
         language,
         userId: user?.id ?? null,
       });
@@ -112,7 +110,6 @@ export function CameraTranslator({
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="space-y-4">
         <div className="relative overflow-hidden rounded-2xl border border-brand-border/50 bg-slate-900 shadow-lg dark:border-slate-700">
-          {/* Hidden source for detection; live feed is painted on canvas */}
           <video
             ref={videoRef}
             className="pointer-events-none absolute h-0 w-0 opacity-0"
@@ -140,7 +137,7 @@ export function CameraTranslator({
           {isLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900/70">
               <LoadingSpinner size="lg" />
-              <p className="text-sm text-slate-300">Loading camera & hand model (CPU)…</p>
+              <p className="text-sm text-slate-300">Loading camera & hand model…</p>
             </div>
           )}
         </div>
@@ -221,20 +218,34 @@ export function CameraTranslator({
           )}
         </div>
 
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          Hold each sign ~1s to add a word to your sentence. Signs: palm = Hello ·
-          thumbs up = Yes · index only = No · fist = Stop · two fingers = Peace ·
-          wave = Hi.
-        </p>
+        <div className="rounded-xl border border-brand-border/40 bg-surface/80 p-3 dark:border-slate-700 dark:bg-slate-900/60">
+          <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            Supported signs ({SIGN_VOCABULARY.length} words)
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+            Hello · Hi · You · How · I · Good · Yes · No · Thank you · Please · Help ·
+            Stop · Peace · Welcome — hold each sign steady, then switch to the next.
+          </p>
+        </div>
       </div>
 
       <div className="space-y-4">
-        <SentenceResultCard sentence={sentence} words={words} />
         <GestureResultCard result={gestureResult} />
-        <div className="flex flex-wrap gap-3">
+        <SentenceResultCard
+          sentence={naturalSentence}
+          rawSentence={rawSentence}
+          words={words}
+        />
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <TextToSpeechButton
-            text={sentence.trim() || (gestureResult?.translatedText ?? "")}
+            text={speakText}
+            size="large"
+            className="w-full sm:w-auto sm:min-w-[12rem]"
           />
+        </div>
+
+        <div className="flex flex-wrap gap-3">
           <button
             type="button"
             onClick={undoLastWord}
@@ -255,7 +266,7 @@ export function CameraTranslator({
           <button
             type="button"
             onClick={handleSave}
-            disabled={(!sentence.trim() && !gestureResult) || saving}
+            disabled={(!naturalSentence.trim() && !gestureResult) || saving}
             className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
           >
             <Save className="h-4 w-4" />

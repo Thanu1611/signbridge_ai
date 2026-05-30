@@ -1,6 +1,6 @@
 /** Client-side cache for TTS audio blobs (shared across hook instances). */
 
-import { GESTURE_TRANSLATIONS } from "@/lib/constants";
+import { allSignLabels } from "@/lib/signs";
 import type { AppLanguage } from "@/types";
 
 const blobUrlCache = new Map<string, string>();
@@ -85,11 +85,7 @@ export async function prefetchTtsPhrases(
   );
 }
 
-/** Unique translated strings used by the live gesture classifier. */
+/** Unique translated strings used by the live sign vocabulary. */
 export function gesturePhraseTexts(language: AppLanguage): string[] {
-  return [
-    ...new Set(
-      Object.values(GESTURE_TRANSLATIONS).map((row) => row[language])
-    ),
-  ];
+  return [...new Set(allSignLabels(language))];
 }

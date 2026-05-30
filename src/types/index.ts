@@ -14,12 +14,22 @@ export type GestureKey =
   | "yes"
   | "no"
   | "help"
-  | "stop";
+  | "stop"
+  | "you"
+  | "how"
+  | "i"
+  | "good"
+  | "please"
+  | "welcome";
 
 export interface GestureResult {
-  gesture: GestureKey;
+  /** Sign vocabulary id (backward-compatible alias: gesture) */
+  gesture: GestureKey | string;
+  detectedWord: string;
   translatedText: string;
   confidence: number;
+  confidenceScore: number;
+  timestamp: number;
 }
 
 export interface TranslationRecord {

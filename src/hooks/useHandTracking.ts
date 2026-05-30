@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   classifyWithModel,
   initGestureClassifier,
+  resetGestureClassifier,
   type WristSample,
 } from "@/lib/gestures/gesture-classifier";
 import {
@@ -109,6 +110,9 @@ export function useHandTracking({ language, onGesture }: UseHandTrackingOptions)
       if (classified) {
         setGestureResult(classified);
         onGesture?.(classified);
+      } else {
+        setGestureResult(null);
+        onGesture?.(null);
       }
     },
     [language, onGesture]
@@ -163,6 +167,7 @@ export function useHandTracking({ language, onGesture }: UseHandTrackingOptions)
     }
 
     closeHandLandmarker();
+    resetGestureClassifier();
 
     setIsActive(false);
     setIsLoading(false);
@@ -207,8 +212,10 @@ export function useHandTracking({ language, onGesture }: UseHandTrackingOptions)
           overlayLandmarksRef.current = null;
           overlayModeRef.current = "tracking";
           setLandmarks(null);
+          setGestureResult(null);
           setSignRecognized(false);
           setStatus("no_hand_detected");
+          onGesture?.(null);
         }
       });
 

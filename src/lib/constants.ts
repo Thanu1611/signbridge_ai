@@ -58,6 +58,30 @@ export const GESTURE_TRANSLATIONS: Record<
     en: "Stop",
     ta: "நிறுத்து",
   },
+  you: {
+    en: "You",
+    ta: "நீங்கள்",
+  },
+  how: {
+    en: "How",
+    ta: "எப்படி",
+  },
+  i: {
+    en: "I",
+    ta: "நான்",
+  },
+  good: {
+    en: "Good",
+    ta: "நல்ல",
+  },
+  please: {
+    en: "Please",
+    ta: "தயவு செய்து",
+  },
+  welcome: {
+    en: "Welcome",
+    ta: "வரவேற்கிறோம்",
+  },
 };
 
 export const EMERGENCY_PHRASES = [
