@@ -85,6 +85,7 @@ export function classifyGestureFromLandmarks(
   const palmOpen = extendedCount >= 4;
   const closedFist = extendedCount === 0 && !thumb;
   const peaceSign = index && middle && !ring && !pinky;
+  const indexOnly = index && !middle && !ring && !pinky && !thumb;
   const thumbsUp = thumb && extendedCount === 0;
 
   let gesture: GestureKey;
@@ -99,6 +100,9 @@ export function classifyGestureFromLandmarks(
   } else if (thumbsUp) {
     gesture = "yes";
     confidence = 0.86;
+  } else if (indexOnly) {
+    gesture = "no";
+    confidence = 0.83;
   } else if (closedFist) {
     gesture = "stop";
     confidence = 0.8;

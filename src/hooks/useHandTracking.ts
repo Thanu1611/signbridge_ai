@@ -6,13 +6,17 @@ import {
   initGestureClassifier,
   type WristSample,
 } from "@/lib/gestures/gesture-classifier";
-import { clearHandOverlay, drawHandOverlay } from "@/lib/mediapipe/draw-hand";
+import {
+  drawCameraFrameWithOverlay,
+  type HandOverlayMode,
+} from "@/lib/mediapipe/draw-hand";
 import {
   closeHandLandmarker,
-  detectHandsInFrame,
-  getHandLandmarker,
-  landmarksFromResult,
+  initHandTracker,
+  landmarksFromMediaPipe,
+  sendHandFrame,
 } from "@/lib/mediapipe/hand-landmarker";
+import { smoothLandmarks } from "@/lib/mediapipe/smooth-landmarks";
 import type { HandLandmark } from "@/lib/mediapipe/types";
 import type { AppLanguage, GestureResult } from "@/types";
 
@@ -28,6 +32,9 @@ export const TRACKING_STATUS_LABEL: Record<CameraTrackingStatus, string> = {
   hand_detected: "Hand detected",
   no_hand_detected: "No hand detected",
 };
+
+const TRACK_INTERVAL_MS = 40;
+const CLASSIFY_INTERVAL_MS = 180;
 
 function mapCameraError(error: unknown): string {
   if (error instanceof DOMException) {
@@ -59,8 +66,14 @@ export function useHandTracking({ language, onGesture }: UseHandTrackingOptions)
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number>(0);
   const wristHistoryRef = useRef<WristSample[]>([]);
-  const lastVideoTimeRef = useRef(-1);
   const runningRef = useRef(false);
+  const trackingBusyRef = useRef(false);
+  const lastTrackAtRef = useRef(0);
+  const lastClassifyAtRef = useRef(0);
+  const smoothLandmarksRef = useRef<HandLandmark[] | null>(null);
+  const overlayLandmarksRef = useRef<HandLandmark[] | null>(null);
+  const overlayModeRef = useRef<HandOverlayMode>("tracking");
+  const classifyGenerationRef = useRef(0);
 
   const [status, setStatus] = useState<CameraTrackingStatus>("inactive");
   const [isActive, setIsActive] = useState(false);
@@ -68,46 +81,15 @@ export function useHandTracking({ language, onGesture }: UseHandTrackingOptions)
   const [error, setError] = useState<string | null>(null);
   const [landmarks, setLandmarks] = useState<HandLandmark[] | null>(null);
   const [gestureResult, setGestureResult] = useState<GestureResult | null>(null);
+  const [signRecognized, setSignRecognized] = useState(false);
 
   useEffect(() => {
     initGestureClassifier();
   }, []);
 
-  const stopCamera = useCallback(() => {
-    runningRef.current = false;
-    cancelAnimationFrame(rafRef.current);
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    wristHistoryRef.current = [];
-    lastVideoTimeRef.current = -1;
-
-    const video = videoRef.current;
-    if (video) video.srcObject = null;
-
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (canvas && ctx) {
-      clearHandOverlay(ctx, canvas.width, canvas.height);
-    }
-
-    setIsActive(false);
-    setIsLoading(false);
-    setLandmarks(null);
-    setGestureResult(null);
-    setStatus("inactive");
-  }, []);
-
-  const processLandmarks = useCallback(
-    async (points: HandLandmark[], w: number, h: number) => {
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext("2d");
-      if (!canvas || !ctx) return;
-
-      canvas.width = w;
-      canvas.height = h;
-      setLandmarks(points);
-      drawHandOverlay(ctx, points, w, h);
-
+  const runClassification = useCallback(
+    async (points: HandLandmark[]) => {
+      const gen = ++classifyGenerationRef.current;
       const now = Date.now();
       wristHistoryRef.current.push({ x: points[0].x, t: now });
       wristHistoryRef.current = wristHistoryRef.current.filter(
@@ -119,14 +101,76 @@ export function useHandTracking({ language, onGesture }: UseHandTrackingOptions)
         language,
         wristHistoryRef.current
       );
+
+      if (gen !== classifyGenerationRef.current) return;
+
+      overlayModeRef.current = classified ? "sign" : "tracking";
+      setSignRecognized(Boolean(classified));
       if (classified) {
         setGestureResult(classified);
         onGesture?.(classified);
       }
-      setStatus("hand_detected");
     },
     [language, onGesture]
   );
+
+  const scheduleClassification = useCallback(
+    (points: HandLandmark[]) => {
+      const now = performance.now();
+      if (now - lastClassifyAtRef.current < CLASSIFY_INTERVAL_MS) return;
+      lastClassifyAtRef.current = now;
+      void runClassification(points);
+    },
+    [runClassification]
+  );
+
+  const renderLiveFrame = useCallback(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || !runningRef.current) return;
+    if (video.readyState < 2 || video.videoWidth === 0) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    drawCameraFrameWithOverlay(
+      ctx,
+      video,
+      overlayLandmarksRef.current,
+      overlayModeRef.current
+    );
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    runningRef.current = false;
+    cancelAnimationFrame(rafRef.current);
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    wristHistoryRef.current = [];
+    smoothLandmarksRef.current = null;
+    overlayLandmarksRef.current = null;
+    overlayModeRef.current = "tracking";
+    trackingBusyRef.current = false;
+    classifyGenerationRef.current += 1;
+
+    const video = videoRef.current;
+    if (video) video.srcObject = null;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (canvas && ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    closeHandLandmarker();
+
+    setIsActive(false);
+    setIsLoading(false);
+    setLandmarks(null);
+    setGestureResult(null);
+    setSignRecognized(false);
+    setStatus("inactive");
+  }, []);
 
   const startCamera = useCallback(async () => {
     if (isLoading || isActive) return;
@@ -148,17 +192,35 @@ export function useHandTracking({ language, onGesture }: UseHandTrackingOptions)
         throw new Error("Camera API is not supported in this browser.");
       }
 
-      const [, stream] = await Promise.all([
-        getHandLandmarker(),
-        navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-          },
-          audio: false,
-        }),
-      ]);
+      await initHandTracker((results) => {
+        const raw = landmarksFromMediaPipe(results);
+
+        if (raw) {
+          const smoothed = smoothLandmarks(smoothLandmarksRef.current, raw, 0.5);
+          smoothLandmarksRef.current = smoothed;
+          overlayLandmarksRef.current = smoothed;
+          setLandmarks(smoothed);
+          setStatus("hand_detected");
+          scheduleClassification(smoothed);
+        } else {
+          smoothLandmarksRef.current = null;
+          overlayLandmarksRef.current = null;
+          overlayModeRef.current = "tracking";
+          setLandmarks(null);
+          setSignRecognized(false);
+          setStatus("no_hand_detected");
+        }
+      });
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 640, max: 1280 },
+          height: { ideal: 480, max: 720 },
+          frameRate: { ideal: 30, max: 30 },
+        },
+        audio: false,
+      });
 
       streamRef.current = stream;
       video.srcObject = stream;
@@ -169,50 +231,30 @@ export function useHandTracking({ language, onGesture }: UseHandTrackingOptions)
       setIsActive(true);
       setStatus("no_hand_detected");
 
-      let detecting = false;
-
-      const detectLoop = () => {
+      const loop = (now: number) => {
         if (!runningRef.current) return;
 
-        const w = video.videoWidth;
-        const h = video.videoHeight;
+        renderLiveFrame();
 
-        if (video.readyState >= 2 && w > 0 && h > 0 && !detecting) {
-          const time = video.currentTime;
-          if (time !== lastVideoTimeRef.current) {
-            lastVideoTimeRef.current = time;
-            detecting = true;
-
-            void detectHandsInFrame(video)
-              .then((hand) => {
-                if (!runningRef.current) return;
-                const points = landmarksFromResult(hand, w, h);
-                const overlay = canvasRef.current;
-                const octx = overlay?.getContext("2d");
-
-                if (points && octx && overlay) {
-                  void processLandmarks(points, w, h);
-                } else if (overlay && octx) {
-                  overlay.width = w;
-                  overlay.height = h;
-                  clearHandOverlay(octx, w, h);
-                  setLandmarks(null);
-                  setStatus("no_hand_detected");
-                }
-              })
-              .catch(() => {
-                /* skip bad frame */
-              })
-              .finally(() => {
-                detecting = false;
-              });
-          }
+        if (
+          !trackingBusyRef.current &&
+          now - lastTrackAtRef.current >= TRACK_INTERVAL_MS &&
+          video.readyState >= 2 &&
+          video.videoWidth > 0
+        ) {
+          lastTrackAtRef.current = now;
+          trackingBusyRef.current = true;
+          void sendHandFrame(video)
+            .catch(() => {})
+            .finally(() => {
+              trackingBusyRef.current = false;
+            });
         }
 
-        rafRef.current = requestAnimationFrame(detectLoop);
+        rafRef.current = requestAnimationFrame(loop);
       };
 
-      detectLoop();
+      rafRef.current = requestAnimationFrame(loop);
     } catch (e) {
       const msg =
         e instanceof Error ? e.message : mapCameraError(e);
@@ -221,12 +263,17 @@ export function useHandTracking({ language, onGesture }: UseHandTrackingOptions)
     } finally {
       setIsLoading(false);
     }
-  }, [isActive, isLoading, processLandmarks, stopCamera]);
+  }, [
+    isActive,
+    isLoading,
+    renderLiveFrame,
+    scheduleClassification,
+    stopCamera,
+  ]);
 
   useEffect(() => {
     return () => {
       stopCamera();
-      closeHandLandmarker();
     };
   }, [stopCamera]);
 
@@ -241,6 +288,7 @@ export function useHandTracking({ language, onGesture }: UseHandTrackingOptions)
     landmarks,
     gestureResult,
     setGestureResult,
+    signRecognized,
     startCamera,
     stopCamera,
   };

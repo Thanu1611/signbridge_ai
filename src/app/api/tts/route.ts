@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { text, voiceType, language } = await request.json();
+    const { text, voiceType, language, lowLatency } = await request.json();
 
     if (!text || typeof text !== "string") {
       return NextResponse.json({ error: "Text is required" }, { status: 400 });
@@ -24,6 +24,7 @@ export async function POST(request: Request) {
       text,
       voiceType,
       language: language as AppLanguage | undefined,
+      lowLatency: Boolean(lowLatency),
     });
 
     return new NextResponse(audioBuffer, {

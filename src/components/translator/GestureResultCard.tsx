@@ -17,7 +17,9 @@ export function GestureResultCard({
           className
         )}
       >
-        <p className="text-slate-500">Show your hand to the camera to detect a sign</p>
+        <p className="text-slate-500">
+          Show a sign to the camera — current word appears here
+        </p>
       </div>
     );
   }
@@ -31,7 +33,7 @@ export function GestureResultCard({
     >
       <div className="mb-2 flex items-center gap-2 text-sm text-brand-cyan">
         <Sparkles className="h-4 w-4" />
-        Detected gesture
+        Current sign
       </div>
       <p className="text-2xl font-bold capitalize text-slate-900 dark:text-white">
         {result.gesture.replace("_", " ")}
